@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+
+import os
+import subprocess
+import stat
+
+def banner():
+    print("""
+=============================
+   KALI GUARD - SYSTEM CHECK
+=============================
+""")
+
+def check_root():
+    if os.geteuid() != 0:
+        print("[!] Run as root for full results\n")
+
+def open_ports():
+    print("\n[+] Checking open listening ports")
+    result = subprocess.getoutput("ss -tuln")
+    print(result)
+
+def weak_permissions():
+    print("\n[+] Checking sensitive file permissions")
+    files = ["/etc/passwd", "/etc/shadow", "/etc/ssh/sshd_config"]
+
+    for file in files:
+        try:
+            perms = oct(os.stat(file).st_mode)[-3:]
+            print(f"{file} → permissions {perms}")
+            if file == "/etc/shadow" and perms != "600":
+                print("⚠️  WARNING: /etc/shadow should be 600")
+        except FileNotFoundError:
+            print(f"{file} not found")
+
+def ssh_root_login():
+    print("\n[+] Checking SSH root login")
+    try:
+        with open("/etc/ssh/sshd_config") as f:
+            for line in f:
+                if "PermitRootLogin" in line and not line.startswith("#"):
+                    print(f"⚠️  {line.strip()}")
+    except:
+        print("SSH config not accessible")
+
+def suspicious_services():
+    print("\n[+] Checking running services")
+    services = subprocess.getoutput("systemctl list-units --type=service --state=running")
+    keywords = ["ftp", "telnet", "rsh"]
+    for line in services.splitlines():
+        for k in keywords:
+            if k in line.lower():
+                print(f"⚠️  Suspicious service running: {line}")
+
+def main():
+    banner()
+    check_root()
+    open_ports()
+    weak_permissions()
+    ssh_root_login()
+    suspicious_services()
+    print("\n✔ Security check complete")
+
+if __name__ == "__main__":
+    main()
